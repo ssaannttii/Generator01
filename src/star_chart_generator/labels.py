@@ -69,6 +69,8 @@ class LabelSpec:
     initial_angle: float
     tracking: float
     scale: float
+    alignment: str = "center"
+    baseline: str = "arc"
 
 
 @dataclass
@@ -115,10 +117,16 @@ def layout_labels(
         advances = _text_advances(spec.text, spec.tracking)
         arc_length = sum(advances) * spec.scale
         arc_angle = arc_length / effective_radius
+        alignment = spec.alignment.lower()
+        theta = spec.initial_angle
+        if alignment == "start":
+            theta += arc_angle / 2.0
+        elif alignment == "end":
+            theta -= arc_angle / 2.0
         placements.append(
             LabelPlacement(
                 spec=spec,
-                theta=spec.initial_angle,
+                theta=theta,
                 arc_angle=arc_angle,
                 advances=advances,
             )
@@ -185,13 +193,41 @@ def draw_label_layers(
     glow = FloatImage.new(width, height, 0.0)
     base_color = hex_to_rgb(text_config.color)
     for placement in placements:
-        scale = placement.spec.scale
-        effective_radius = max((placement.spec.radius_x + placement.spec.radius_y) * 0.5, 1.0)
+        spec = placement.spec
+        scale = spec.scale
+        total_advance = sum(placement.advances) * scale
+        if spec.baseline.lower() == "linear":
+            theta_center = placement.theta
+            cx = spec.center[0] + spec.radius_x * math.cos(theta_center)
+            cy = spec.center[1] + spec.radius_y * math.sin(theta_center)
+            tx = -spec.radius_x * math.sin(theta_center)
+            ty = spec.radius_y * math.cos(theta_center)
+            length = math.hypot(tx, ty)
+            if length <= 1e-6:
+                tx = -math.sin(theta_center)
+                ty = math.cos(theta_center)
+                length = math.hypot(tx, ty)
+            tx /= length
+            ty /= length
+            start = -total_advance / 2.0
+            cursor = start
+            rotation = math.degrees(math.atan2(ty, tx))
+            for advance, char in zip(placement.advances, spec.text):
+                cursor += (advance * scale) / 2.0
+                x = cx + tx * cursor
+                y = cy + ty * cursor
+                glyph = _glyph(char)
+                _draw_glyph(core, glyph, (x, y), scale, rotation, base_color, 1.0)
+                _draw_glyph(glow, glyph, (x, y), scale * 1.6, rotation, base_color, 0.2)
+                cursor += (advance * scale) / 2.0
+            continue
+
+        effective_radius = max((spec.radius_x + spec.radius_y) * 0.5, 1.0)
         theta = placement.theta - placement.arc_angle / 2.0
-        for advance, char in zip(placement.advances, placement.spec.text):
+        for advance, char in zip(placement.advances, spec.text):
             theta += (advance * scale) / (2.0 * effective_radius)
-            x = placement.spec.center[0] + placement.spec.radius_x * math.cos(theta)
-            y = placement.spec.center[1] + placement.spec.radius_y * math.sin(theta)
+            x = spec.center[0] + spec.radius_x * math.cos(theta)
+            y = spec.center[1] + spec.radius_y * math.sin(theta)
             rotation = math.degrees(theta) - 90.0
             glyph = _glyph(char)
             _draw_glyph(core, glyph, (x, y), scale, rotation, base_color, 1.0)

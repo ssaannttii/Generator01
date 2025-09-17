@@ -26,6 +26,21 @@ rings:
     color: "#FFC107"
     ticks_every_deg: 20
     label: "RELAY 7"
+readouts:
+  - text: "ENERGY 73%"
+    alignment: end
+    placement:
+      type: arc
+      ring: 1
+      angle_deg: 228
+      offset: 0.04
+  - text: "ΔV 12.4"
+    alignment: center
+    placement:
+      type: linear
+      ring: 2
+      angle_deg: 48
+      offset: 0.015
 stars:
   core:
     sigma: 0.20
