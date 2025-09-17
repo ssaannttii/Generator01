@@ -1,0 +1,55 @@
+seed: 2411
+name: demo
+resolution:
+  width: 2048
+  height: 2048
+  ssaa: 1
+camera:
+  tilt_deg: 32
+  fov_deg: 35
+rings:
+  - r: 0.32
+    width: 0.008
+    color: "#1E90FF"
+    dash: [10, 4]
+    ticks_every_deg: 10
+    label: "ORBITAL NODE 20.64 Mσ"
+  - r: 0.42
+    width: 0.007
+    color: "#FF3B2F"
+    dash: [12, 5]
+    ticks_every_deg: 15
+    label: "SECTOR 3A"
+    label_angle_deg: 120
+  - r: 0.54
+    width: 0.006
+    color: "#FFC107"
+    ticks_every_deg: 20
+    label: "RELAY 7"
+stars:
+  core:
+    sigma: 0.20
+    alpha: 3.2
+    count: 5500
+  halo:
+    count: 2200
+    min_r: 0.35
+    max_r: 1.05
+  brightness_power: 1.9
+  min_size_px: 0.6
+  max_size_px: 2.5
+text:
+  font: null
+  size_px: 32
+  color: "#e6f5ff"
+  tracking: -0.6
+  tabular_digits: true
+post:
+  bloom:
+    threshold: 0.9
+    intensity: 0.36
+    radius: 16
+  chromatic_aberration:
+    k: 0.0018
+  vignette: 0.14
+  grain: 0.012
