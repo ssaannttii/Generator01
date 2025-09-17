@@ -7,9 +7,10 @@ from typing import List, Tuple
 import math
 import random
 
-from .config import Camera, Resolution, StarConfig
+from .camera import ProjectionParams
+from .config import BackgroundDistribution, BulgeDistribution, StarConfig
 from .image import FloatImage
-from .utils import mix_colors
+from .utils import clamp, hex_to_rgb, mix_colors
 
 Color = Tuple[float, float, float]
 
@@ -23,72 +24,86 @@ class Star:
     color: Color
 
 
-def _sersic_radius(rng: random.Random, sigma: float, alpha: float) -> float:
-    u = max(min(rng.random(), 1.0 - 1e-6), 1e-6)
-    value = sigma * (-math.log(1.0 - u)) ** (1.0 / max(alpha, 1e-3))
-    return min(max(value, 0.0), 1.0)
+def _sample_bulge_radius(
+    rng: random.Random, sigma: float, alpha: float
+) -> float:
+    """Sample a radius following an inverse-power falloff."""
+
+    sigma = max(sigma, 1e-4)
+    epsilon = sigma * 0.12 + 1e-4
+    if abs(alpha - 1.0) < 1e-6:
+        span = math.log((sigma + epsilon) / epsilon)
+        value = math.exp(rng.random() * span) * epsilon - epsilon
+    else:
+        exponent = 1.0 - alpha
+        base = (sigma + epsilon) ** exponent - epsilon ** exponent
+        value = (rng.random() * base + epsilon ** exponent) ** (1.0 / exponent) - epsilon
+    return clamp(value, 0.0, sigma)
 
 
-def _halo_radius(rng: random.Random, r_min: float, r_max: float) -> float:
-    if r_max <= r_min:
-        r_max = r_min + 1e-3
-    u = rng.random()
-    return math.sqrt(u * (r_max * r_max - r_min * r_min) + r_min * r_min)
-
-
-def _color_from_intensity(intensity: float) -> Color:
-    cold = (0.18, 0.65, 1.0)
-    hot = (1.0, 0.42, 0.18)
-    t = min(max(intensity, 0.0), 1.0)
-    return mix_colors(cold, hot, t)
+def _sample_background_position(
+    rng: random.Random,
+    projection: ProjectionParams,
+    config: BackgroundDistribution,
+) -> Tuple[float, float, float]:
+    if config.max_r > config.min_r:
+        u = rng.random()
+        radius = math.sqrt(
+            u * (config.max_r * config.max_r - config.min_r * config.min_r)
+            + config.min_r * config.min_r
+        )
+        angle = rng.random() * math.tau
+        x, y, depth = projection.project(radius, angle)
+    else:
+        x = rng.random() * projection.width
+        y = rng.random() * projection.height
+        depth = projection.distance
+    jitter = config.jitter * projection.base_radius
+    x += rng.uniform(-jitter, jitter)
+    y += rng.uniform(-jitter * 0.6, jitter * 0.6)
+    return x, y, depth
 
 
 def generate_star_field(
     config: StarConfig,
-    resolution: Resolution,
-    camera: Camera,
+    projection: ProjectionParams,
     rng: random.Random,
+    ssaa: int,
 ) -> List[Star]:
-    width, height = resolution.supersampled()
-    ssaa = max(1, resolution.ssaa)
-    base_radius = min(width, height) * 0.5 * 0.92
-    ellipse_ratio = camera.ellipse_ratio
-    cx, cy = width / 2.0, height / 2.0
+    warm_color = hex_to_rgb(config.warm_color)
+    hot_color = hex_to_rgb(config.hot_color)
+    background_color = hex_to_rgb(config.background_color)
 
     stars: List[Star] = []
 
-    for _ in range(config.core.count):
-        theta = rng.random() * math.tau
-        radius = _sersic_radius(rng, config.core.sigma, config.core.alpha)
-        intensity = (1.0 - rng.random()) ** (1.0 / config.brightness_power)
-        color = _color_from_intensity(intensity)
-        size = config.min_size_px + intensity * (config.max_size_px - config.min_size_px)
-        size *= ssaa
-        rx = base_radius * radius
-        ry = rx * ellipse_ratio
-        x = cx + rx * math.cos(theta)
-        y = cy + ry * math.sin(theta)
-        stars.append(Star(x=x, y=y, radius=size, intensity=intensity * 1.35, color=color))
+    for _ in range(config.bulge.count):
+        angle = rng.random() * math.tau
+        radius = _sample_bulge_radius(
+            rng, config.bulge.sigma, config.bulge.falloff_alpha
+        )
+        x, y, depth = projection.project(radius, angle)
+        scale = clamp(depth / projection.distance, 0.4, 2.2)
+        size = rng.uniform(*config.bulge.size_px) * ssaa * clamp(scale, 0.7, 1.8)
+        tightness = clamp(1.0 - radius / max(config.bulge.sigma, 1e-3), 0.0, 1.0)
+        color_mix = clamp(tightness ** 0.85 + rng.random() * 0.2, 0.0, 1.0)
+        color = mix_colors(warm_color, hot_color, color_mix)
+        intensity = (1.15 + rng.random() * 1.5) * clamp(scale ** 0.6, 0.6, 1.9)
+        stars.append(Star(x=x, y=y, radius=size, intensity=intensity, color=color))
 
-    for _ in range(config.halo.count):
-        theta = rng.random() * math.tau
-        radius = _halo_radius(rng, config.halo.min_r, config.halo.max_r)
-        intensity = (1.0 - rng.random()) ** (1.0 / (config.brightness_power + 0.4))
-        color = _color_from_intensity(intensity * 0.8)
-        size = config.min_size_px * 0.75 + intensity * (config.max_size_px - config.min_size_px)
-        size *= ssaa
-        rx = base_radius * radius
-        ry = rx * ellipse_ratio
-        x = cx + rx * math.cos(theta)
-        y = cy + ry * math.sin(theta)
+    for _ in range(config.background.count):
+        x, y, depth = _sample_background_position(rng, projection, config.background)
+        scale = clamp(depth / projection.distance, 0.5, 1.6)
+        size = rng.uniform(*config.background.size_px) * ssaa * clamp(scale, 0.6, 1.4)
+        intensity = 0.35 + rng.random() * 0.65
+        hue_mix = clamp(rng.random() * 0.35 + 0.2, 0.0, 1.0)
+        color = mix_colors(background_color, warm_color, hue_mix)
         stars.append(Star(x=x, y=y, radius=size, intensity=intensity, color=color))
 
     return stars
 
 
-def render_star_field(stars: List[Star], resolution: Resolution) -> FloatImage:
-    width, height = resolution.supersampled()
-    image = FloatImage.new(width, height, 0.0)
+def render_star_field(stars: List[Star], projection: ProjectionParams) -> FloatImage:
+    image = FloatImage.new(projection.width, projection.height, 0.0)
     for star in stars:
         sigma = max(0.5, star.radius / 2.0)
         image.add_gaussian(star.x, star.y, sigma, star.intensity, star.color)
