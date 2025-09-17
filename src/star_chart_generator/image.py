@@ -101,22 +101,18 @@ class FloatImage:
                 row[x][2] *= factor
 
     def add_image(self, other: "FloatImage") -> None:
-        for y in range(self.height):
-            row = self.pixels[y]
-            other_row = other.pixels[y]
-            for x in range(self.width):
-                row[x][0] += other_row[x][0]
-                row[x][1] += other_row[x][1]
-                row[x][2] += other_row[x][2]
+        for row, other_row in zip(self.pixels, other.pixels):
+            for pixel, other_pixel in zip(row, other_row):
+                pixel[0] += other_pixel[0]
+                pixel[1] += other_pixel[1]
+                pixel[2] += other_pixel[2]
 
     def add_scaled_image(self, other: "FloatImage", scale: float) -> None:
-        for y in range(self.height):
-            row = self.pixels[y]
-            other_row = other.pixels[y]
-            for x in range(self.width):
-                row[x][0] += other_row[x][0] * scale
-                row[x][1] += other_row[x][1] * scale
-                row[x][2] += other_row[x][2] * scale
+        for row, other_row in zip(self.pixels, other.pixels):
+            for pixel, other_pixel in zip(row, other_row):
+                pixel[0] += other_pixel[0] * scale
+                pixel[1] += other_pixel[1] * scale
+                pixel[2] += other_pixel[2] * scale
 
     def clamp(self, lo: float = 0.0, hi: float = 1.0) -> None:
         for y in range(self.height):
@@ -211,44 +207,78 @@ class FloatImage:
 def gaussian_blur(image: FloatImage, sigma: float) -> FloatImage:
     if sigma <= 0:
         return image.copy()
-    radius = max(1, int(math.ceil(sigma * 3.0)))
-    kernel = [math.exp(-(i * i) / (2.0 * sigma * sigma)) for i in range(-radius, radius + 1)]
-    kernel_sum = sum(kernel)
-    kernel = [k / kernel_sum for k in kernel]
 
-    # Horizontal pass
-    temp = FloatImage.new(image.width, image.height, 0.0)
-    for y in range(image.height):
-        for x in range(image.width):
-            acc = [0.0, 0.0, 0.0]
-            for k, weight in enumerate(kernel):
-                xx = x + k - radius
-                if 0 <= xx < image.width:
-                    src = image.pixels[y][xx]
-                    acc[0] += src[0] * weight
-                    acc[1] += src[1] * weight
-                    acc[2] += src[2] * weight
-            temp.pixels[y][x][0] = acc[0]
-            temp.pixels[y][x][1] = acc[1]
-            temp.pixels[y][x][2] = acc[2]
+    kernel, radius = gaussian_kernel(sigma)
+    width, height = image.width, image.height
 
-    # Vertical pass
-    output = FloatImage.new(image.width, image.height, 0.0)
-    for y in range(image.height):
-        for x in range(image.width):
-            acc = [0.0, 0.0, 0.0]
-            for k, weight in enumerate(kernel):
-                yy = y + k - radius
-                if 0 <= yy < image.height:
-                    src = temp.pixels[yy][x]
-                    acc[0] += src[0] * weight
-                    acc[1] += src[1] * weight
-                    acc[2] += src[2] * weight
-            output.pixels[y][x][0] = acc[0]
-            output.pixels[y][x][1] = acc[1]
-            output.pixels[y][x][2] = acc[2]
+    temp = FloatImage.new(width, height, 0.0)
+    source_pixels = image.pixels
+    temp_pixels = temp.pixels
+    for y in range(height):
+        src_row = source_pixels[y]
+        dst_row = temp_pixels[y]
+        for x in range(width):
+            acc0 = acc1 = acc2 = 0.0
+            start = x - radius
+            kernel_index = 0
+            if start < 0:
+                kernel_index = -start
+                start = 0
+            end = x + radius + 1
+            if end > width:
+                end = width
+            for xx in range(start, end):
+                weight = kernel[kernel_index]
+                pixel = src_row[xx]
+                acc0 += pixel[0] * weight
+                acc1 += pixel[1] * weight
+                acc2 += pixel[2] * weight
+                kernel_index += 1
+            dst_pixel = dst_row[x]
+            dst_pixel[0] = acc0
+            dst_pixel[1] = acc1
+            dst_pixel[2] = acc2
+
+    output = FloatImage.new(width, height, 0.0)
+    output_pixels = output.pixels
+    for y in range(height):
+        dst_row = output_pixels[y]
+        for x in range(width):
+            acc0 = acc1 = acc2 = 0.0
+            start = y - radius
+            kernel_index = 0
+            if start < 0:
+                kernel_index = -start
+                start = 0
+            end = y + radius + 1
+            if end > height:
+                end = height
+            for yy in range(start, end):
+                weight = kernel[kernel_index]
+                pixel = temp_pixels[yy][x]
+                acc0 += pixel[0] * weight
+                acc1 += pixel[1] * weight
+                acc2 += pixel[2] * weight
+                kernel_index += 1
+            dst_pixel = dst_row[x]
+            dst_pixel[0] = acc0
+            dst_pixel[1] = acc1
+            dst_pixel[2] = acc2
 
     return output
 
 
-__all__ = ["FloatImage", "gaussian_blur", "Color"]
+def gaussian_kernel(sigma: float) -> Tuple[List[float], int]:
+    if sigma <= 0:
+        return [1.0], 0
+    radius = max(1, int(math.ceil(sigma * 3.0)))
+    denom = 2.0 * sigma * sigma
+    kernel = [math.exp(-(offset * offset) / denom) for offset in range(-radius, radius + 1)]
+    total = sum(kernel)
+    if total <= 0.0:
+        return [1.0], 0
+    inv_total = 1.0 / total
+    return [value * inv_total for value in kernel], radius
+
+
+__all__ = ["FloatImage", "gaussian_blur", "gaussian_kernel", "Color"]
