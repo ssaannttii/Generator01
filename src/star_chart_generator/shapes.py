@@ -94,6 +94,34 @@ def render_ui_layers(config: SceneConfig, resolution: Tuple[int, int]) -> Tuple[
                 )
             )
 
+    for readout in config.readouts:
+        ring_index = readout.placement.ring_index
+        if ring_index < 0 or ring_index >= len(config.rings):
+            continue
+        ring = config.rings[ring_index]
+        if readout.placement.radius is not None:
+            label_radius = readout.placement.radius
+        else:
+            label_radius = ring.r + readout.placement.radial_offset
+        label_rx = base_radius * label_radius
+        label_ry = label_rx * ellipse_ratio
+        angle = math.radians(readout.placement.angle_deg)
+        baseline = "linear" if readout.placement.kind == "linear" else "arc"
+        label_specs.append(
+            LabelSpec(
+                ring_index=ring_index,
+                text=readout.text,
+                center=center,
+                radius_x=label_rx,
+                radius_y=label_ry,
+                initial_angle=angle,
+                tracking=config.text.tracking,
+                scale=label_scale,
+                alignment=readout.alignment,
+                baseline=baseline,
+            )
+        )
+
     if label_specs:
         placements = layout_labels(label_specs)
         label_core, label_glow = draw_label_layers((width, height), placements, config.text)

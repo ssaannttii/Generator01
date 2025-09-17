@@ -61,6 +61,26 @@ class RingConfig:
 
 
 @dataclass(frozen=True)
+class ReadoutPlacement:
+    """Placement description for a numeric readout."""
+
+    kind: str
+    ring_index: int
+    angle_deg: float
+    radius: Optional[float] = None
+    radial_offset: float = 0.0
+
+
+@dataclass(frozen=True)
+class ReadoutConfig:
+    """Configuration for a numeric readout rendered near a ring."""
+
+    text: str
+    alignment: str
+    placement: ReadoutPlacement
+
+
+@dataclass(frozen=True)
 class CoreDistribution:
     """Configuration for the dense stellar core."""
 
@@ -132,6 +152,7 @@ class SceneConfig:
     camera: Camera
     rings: List[RingConfig]
     stars: StarConfig
+    readouts: List[ReadoutConfig] = field(default_factory=list)
     text: TextConfig = field(default_factory=TextConfig)
     post: PostConfig = field(default_factory=PostConfig)
     lut: Optional[str] = None
@@ -173,6 +194,51 @@ class SceneConfig:
             )
             for item in data.get("rings", [])
         ]
+
+        readouts: List[ReadoutConfig] = []
+        for item in data.get("readouts", []):
+            if not isinstance(item, dict):
+                continue
+            if "text" not in item:
+                continue
+            text_value = str(item.get("text", ""))
+            alignment_raw = str(item.get("alignment", "center")).lower()
+            alignment_map = {
+                "center": "center",
+                "middle": "center",
+                "start": "start",
+                "left": "start",
+                "begin": "start",
+                "end": "end",
+                "right": "end",
+            }
+            alignment = alignment_map.get(alignment_raw, "center")
+            placement_data = item.get("placement", {})
+            if not isinstance(placement_data, dict):
+                continue
+            kind = str(placement_data.get("type", placement_data.get("kind", "arc"))).lower()
+            if kind not in {"arc", "linear"}:
+                kind = "arc"
+            ring_index = int(placement_data.get("ring", placement_data.get("ring_index", 0)))
+            angle_deg = float(placement_data.get("angle_deg", 90.0))
+            radius_value = placement_data.get("radius")
+            radius = float(radius_value) if radius_value is not None else None
+            radial_offset = float(
+                placement_data.get("offset", placement_data.get("radial_offset", 0.0))
+            )
+            readouts.append(
+                ReadoutConfig(
+                    text=text_value,
+                    alignment=alignment,
+                    placement=ReadoutPlacement(
+                        kind=kind,
+                        ring_index=ring_index,
+                        angle_deg=angle_deg,
+                        radius=radius,
+                        radial_offset=radial_offset,
+                    ),
+                )
+            )
 
         stars_data = data.get("stars", {})
         core_data = stars_data.get("core", {})
@@ -228,6 +294,7 @@ class SceneConfig:
             resolution=resolution,
             camera=camera,
             rings=rings,
+            readouts=readouts,
             stars=stars,
             text=text,
             post=post,
@@ -351,6 +418,8 @@ __all__ = [
     "Resolution",
     "Camera",
     "RingConfig",
+    "ReadoutPlacement",
+    "ReadoutConfig",
     "CoreDistribution",
     "HaloDistribution",
     "StarConfig",
