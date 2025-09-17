@@ -211,3 +211,47 @@ Preparar:
 - Esquema de materiales/post exactos.
 - Lista de fuentes e iconos a incluir en el repositorio.
 
+---
+
+## 15. Implementación Python inicial
+
+Se añadió una referencia funcional en `src/star_chart_generator` que cubre:
+
+- *Campo estelar*: `sampling.py` genera nubes con núcleo y halo más suavizado de doble trazo, listos para bloom.
+- *Anillos curvos*: `shapes.py` construye curvas paramétricas con doble *stroke* y exporta patrones de *dash*.
+- *Layout de etiquetas*: `labels.py` aplica heurísticas de fuerzas, *leader lines* y ajuste fino de kerning.
+- *Postprocesado*: `post.py` orquesta bloom, aberración cromática, LUT y exportes en 16-bit.
+
+La CLI (`scripts/generate_star_chart.py`) acepta escenas YAML, *overrides* por CLI y escribe renders/PSD.
+
+### Cómo ejecutar
+
+```bash
+python scripts/generate_star_chart.py configs/demo.yaml outputs/denso.png
+```
+
+Genera `outputs/denso.png` y un PSD por capas (`outputs/denso_layers.psd`). Se puede sobreescribir el destino con `--output`.
+
+### Fuentes
+
+El repositorio incluye presets (`configs/demo.yaml`, `configs/denso.yaml`) y fuentes MSDF para Orbitron en `assets/fonts/`. Ajusta texto pasando `--font` o editando la escena.
+
+### Dependencias
+
+- Núcleo: `numpy`, `scipy`, `moderngl`, `pyyaml`, `Pillow`, `msdf-bmfont`.
+- Tooling: `rich` para CLI, `pytest` para QA, `opencv-python` para histogramas opcionales.
+
+Instalar con:
+
+```bash
+pip install -r requirements.txt
+```
+
+### QA
+
+- `pytest -k sampling` valida la distribución polar y el *clamping* de brillo.
+- `pytest -k labels` asegura que las etiquetas resuelven colisiones y respetan *padding*.
+- `python scripts/generate_star_chart.py configs/demo.yaml --compare outputs/golden/demo.png` comprueba SSIM vs *golden frame*.
+
+Ejecutar `pytest` tras modificar el motor garantiza que la geometría y el *post* se mantienen coherentes.
+
