@@ -25,6 +25,44 @@ def _sample_energy(image, x: float, y: float, radius: int = 3) -> float:
     return total
 
 
+def _pixel_intensity(pixel) -> float:
+    return pixel[0] + pixel[1] + pixel[2]
+
+
+def _half_max_area(image) -> int:
+    max_intensity = 0.0
+    for row in image.pixels:
+        for pixel in row:
+            max_intensity = max(max_intensity, _pixel_intensity(pixel))
+    if max_intensity <= 0.0:
+        return 0
+    threshold = max_intensity * 0.5
+    count = 0
+    for row in image.pixels:
+        for pixel in row:
+            if _pixel_intensity(pixel) >= threshold:
+                count += 1
+    return count
+
+
+def _label_extent(image, threshold: float = 1e-4) -> tuple[int, int]:
+    rows = [
+        y
+        for y, row in enumerate(image.pixels)
+        if sum(_pixel_intensity(pixel) for pixel in row) > threshold
+    ]
+    cols = [
+        x
+        for x in range(image.width)
+        if sum(_pixel_intensity(image.pixels[y][x]) for y in range(image.height)) > threshold
+    ]
+    if not rows or not cols:
+        return 0, 0
+    height = rows[-1] - rows[0] + 1
+    width = cols[-1] - cols[0] + 1
+    return width, height
+
+
 def test_generate_star_chart(tmp_path: Path):
     config = SceneConfig.from_dict(
         {
@@ -128,3 +166,63 @@ def test_generate_star_chart(tmp_path: Path):
     output_path = tmp_path / "chart.png"
     result.save(str(output_path))
     assert output_path.exists()
+
+
+def test_supersampling_consistency():
+    def make_config(ssaa: int) -> SceneConfig:
+        return SceneConfig.from_dict(
+            {
+                "seed": 321,
+                "resolution": {"width": 64, "height": 64, "ssaa": ssaa},
+                "camera": {"tilt_deg": 25, "fov_deg": 35},
+                "rings": [
+                    {
+                        "r": 0.3,
+                        "width": 0.0,
+                        "color": "#000000",
+                        "halo_color": "#000000",
+                    }
+                ],
+                "readouts": [
+                    {
+                        "text": "TEST",
+                        "alignment": "center",
+                        "placement": {
+                            "type": "linear",
+                            "ring": 0,
+                            "angle_deg": 0,
+                            "offset": 0.12,
+                        },
+                    }
+                ],
+                "stars": {
+                    "core": {"sigma": 0.08, "alpha": 3.0, "count": 1},
+                    "halo": {"count": 0, "min_r": 0.5, "max_r": 0.8},
+                    "min_size_px": 1.2,
+                    "max_size_px": 1.2,
+                    "brightness_power": 1.4,
+                },
+                "text": {"size_px": 18, "color": "#ffffff", "tracking": 0.0},
+                "post": {
+                    "bloom": {"threshold": 0.8, "intensity": 0.0, "radius": 6.0},
+                    "chromatic_aberration": {"k": 0.0},
+                    "vignette": 0.0,
+                    "grain": 0.0,
+                },
+            }
+        )
+
+    base_config = make_config(1)
+    supersampled_config = make_config(2)
+
+    base_result = generate_star_chart(base_config, seed=777)
+    supersampled_result = generate_star_chart(supersampled_config, seed=777)
+
+    base_star_area = _half_max_area(base_result.layers["stars"])
+    supersampled_star_area = _half_max_area(supersampled_result.layers["stars"])
+    assert base_star_area == supersampled_star_area
+
+    base_label_extent = _label_extent(base_result.layers["ui_core"])
+    supersampled_label_extent = _label_extent(supersampled_result.layers["ui_core"])
+    assert base_label_extent == supersampled_label_extent
+
