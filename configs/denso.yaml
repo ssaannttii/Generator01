@@ -1,0 +1,60 @@
+seed: 12981
+name: dense
+resolution:
+  width: 3072
+  height: 4096
+  ssaa: 1
+camera:
+  tilt_deg: 28
+  fov_deg: 32
+rings:
+  - r: 0.28
+    width: 0.01
+    color: "#00B5FF"
+    dash: [8, 3]
+    ticks_every_deg: 12
+    label: "PRIMARY LATTICE"
+  - r: 0.36
+    width: 0.008
+    color: "#FF6A00"
+    ticks_every_deg: 15
+    label: "DATA STACK 4"
+    label_angle_deg: 40
+  - r: 0.44
+    width: 0.007
+    color: "#FF3B2F"
+    dash: [14, 6]
+    ticks_every_deg: 18
+    label: "SINGULARITY VECTOR"
+  - r: 0.62
+    width: 0.006
+    color: "#1E90FF"
+    ticks_every_deg: 20
+    label: "COORD SHIELD"
+stars:
+  core:
+    sigma: 0.18
+    alpha: 3.4
+    count: 8000
+  halo:
+    count: 3200
+    min_r: 0.30
+    max_r: 1.05
+  brightness_power: 1.7
+  min_size_px: 0.6
+  max_size_px: 2.9
+text:
+  font: null
+  size_px: 34
+  color: "#dff6ff"
+  tracking: -0.65
+  tabular_digits: true
+post:
+  bloom:
+    threshold: 0.85
+    intensity: 0.34
+    radius: 18
+  chromatic_aberration:
+    k: 0.0024
+  vignette: 0.15
+  grain: 0.014

@@ -215,43 +215,36 @@ Preparar:
 
 ## 15. Implementación Python inicial
 
-Se añadió una referencia funcional en `src/star_chart_generator` que cubre:
+Se añadió una referencia funcional en `src/star_chart_generator` que evita dependencias externas y cubre:
 
-- *Campo estelar*: `sampling.py` genera nubes con núcleo y halo más suavizado de doble trazo, listos para bloom.
-- *Anillos curvos*: `shapes.py` construye curvas paramétricas con doble *stroke* y exporta patrones de *dash*.
-- *Layout de etiquetas*: `labels.py` aplica heurísticas de fuerzas, *leader lines* y ajuste fino de kerning.
-- *Postprocesado*: `post.py` orquesta bloom, aberración cromática, LUT y exportes en 16-bit.
+- *Campo estelar*: `sampling.py` genera nubes núcleo/halo y pinta gaussianas en un *framebuffer* propio.
+- *Anillos curvos*: `shapes.py` dibuja arcos, *dashes* y *ticks* mediante un *canvas* float de precisión simple.
+- *Layout de etiquetas*: `labels.py` usa un *bitmap font* integrado, resuelve colisiones y curva cada glifo.
+- *Postprocesado*: `post.py` implementa bloom, aberración cromática, viñeteado y *tone mapping* ACES en puro Python.
 
-La CLI (`scripts/generate_star_chart.py`) acepta escenas YAML, *overrides* por CLI y escribe renders/PSD.
+La CLI (`scripts/generate_star_chart.py`) acepta escenas YAML, permite overrides y exporta PNG junto con capas opcionales.
 
 ### Cómo ejecutar
 
 ```bash
-python scripts/generate_star_chart.py configs/demo.yaml outputs/denso.png
+python scripts/generate_star_chart.py configs/demo.yaml outputs/denso.png --layers-dir outputs/layers
 ```
 
-Genera `outputs/denso.png` y un PSD por capas (`outputs/denso_layers.psd`). Se puede sobreescribir el destino con `--output`.
+Genera `outputs/denso.png` más archivos `PNG` individuales por capa en `outputs/layers/`.
 
 ### Fuentes
 
-El repositorio incluye presets (`configs/demo.yaml`, `configs/denso.yaml`) y fuentes MSDF para Orbitron en `assets/fonts/`. Ajusta texto pasando `--font` o editando la escena.
+Los presets (`configs/demo.yaml`, `configs/denso.yaml`) sirven de punto de partida y pueden ajustarse sin necesidad de tipografías externas: el motor integra un set compacto de glifos vectorizados.
 
 ### Dependencias
 
-- Núcleo: `numpy`, `scipy`, `moderngl`, `pyyaml`, `Pillow`, `msdf-bmfont`.
-- Tooling: `rich` para CLI, `pytest` para QA, `opencv-python` para histogramas opcionales.
-
-Instalar con:
-
-```bash
-pip install -r requirements.txt
-```
+El motor depende únicamente de la biblioteca estándar de Python. No es necesario instalar paquetes adicionales; `requirements.txt` queda como documentación.
 
 ### QA
 
-- `pytest -k sampling` valida la distribución polar y el *clamping* de brillo.
-- `pytest -k labels` asegura que las etiquetas resuelven colisiones y respetan *padding*.
-- `python scripts/generate_star_chart.py configs/demo.yaml --compare outputs/golden/demo.png` comprueba SSIM vs *golden frame*.
+- `pytest -k sampling` valida la distribución polar y el promedio radial núcleo/halo.
+- `pytest -k labels` asegura que las etiquetas no colisionan y renderizan energía en el canvas.
+- `python scripts/generate_star_chart.py configs/demo.yaml --compare outputs/golden/demo.png` calcula diferencia media absoluta frente a un *golden frame*.
 
 Ejecutar `pytest` tras modificar el motor garantiza que la geometría y el *post* se mantienen coherentes.
 
