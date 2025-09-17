@@ -18,7 +18,7 @@ if SRC_PATH.exists():
     if src_str not in sys.path:
         sys.path.insert(0, src_str)
 
-from star_chart_generator import SceneConfig, generate_star_chart
+from star_chart_generator import QualityPreset, SceneConfig, generate_star_chart
 from star_chart_generator.image import FloatImage
 
 
@@ -47,6 +47,14 @@ def parse_args() -> argparse.Namespace:
         "--compare",
         type=Path,
         help="Compute the mean absolute difference against a reference PNG",
+    )
+    parser.add_argument(
+        "--quality",
+        choices=[preset.value for preset in QualityPreset],
+        help=(
+            "Render using a quality preset. 'preview' and 'draft' lower resolution and effects "
+            "for faster iteration; 'final' keeps the configuration untouched."
+        ),
     )
     return parser.parse_args()
 
@@ -115,6 +123,12 @@ def _mean_abs_diff(a: FloatImage, b: FloatImage) -> float:
 def main() -> None:
     args = parse_args()
     config = SceneConfig.load(args.config)
+    if args.quality:
+        try:
+            config = config.with_quality(args.quality)
+        except ValueError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            sys.exit(2)
     result = generate_star_chart(config, seed=args.seed)
 
     output_path = args.output_override or args.output
