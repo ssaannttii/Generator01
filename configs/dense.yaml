@@ -1,0 +1,118 @@
+seed: 2411
+resolution:
+  width: 4096
+  height: 6144
+  ssaa: 2
+camera:
+  tilt_deg: 35
+  fov_deg: 35
+rings:
+  - radius: 0.35
+    width: 0.006
+    color: "#1E90FF"
+    core_intensity: 1.45
+    glow_radius: 0.020
+    glow_intensity: 1.3
+    dash: [14, 6]
+    ticks:
+      every_deg: 10
+      length: 0.035
+      thickness: 0.0012
+      color: "#00B5FF"
+      intensity: 1.35
+    labels:
+      - text: "20.64 Mσ"
+        sweep_deg: 70
+        offset_deg: 46
+        side: outer
+        font_size: 44
+        tracking: -2.5
+        color: "#1E90FF"
+        intensity: 1.3
+      - text: "ΔV 03.17"
+        sweep_deg: 60
+        offset_deg: 225
+        side: inner
+        font_size: 40
+        tracking: -1.6
+        color: "#FF6A00"
+        intensity: 1.4
+  - radius: 0.47
+    width: 0.007
+    color: "#FF3B2F"
+    core_intensity: 1.55
+    glow_color: "#FF6A00"
+    glow_radius: 0.026
+    glow_intensity: 1.25
+    dash: [18, 9]
+    ticks:
+      every_deg: 15
+      phase_deg: 7
+      length: 0.040
+      thickness: 0.0014
+      color: "#FF6A00"
+      intensity: 1.2
+    labels:
+      - text: "Σ CORE"
+        sweep_deg: 80
+        offset_deg: 310
+        side: outer
+        font_size: 42
+        tracking: -2.0
+        color: "#FF6A00"
+        intensity: 1.35
+  - radius: 0.62
+    width: 0.008
+    color: "#00B5FF"
+    core_intensity: 1.2
+    glow_radius: 0.030
+    dash: [30, 12]
+    ticks:
+      every_deg: 20
+      length: 0.045
+      thickness: 0.0015
+      color: "#00B5FF"
+      intensity: 1.05
+stars:
+  core:
+    sigma: 0.22
+    alpha: 3.4
+    count: 24000
+  halo:
+    count: 9000
+    min_r: 0.32
+    max_r: 1.02
+    min_separation: 0.0045
+  brightness_power: 1.9
+  size_min: 0.0016
+  size_max: 0.0065
+  color_cool: "#1E90FF"
+  color_warm: "#FF6A00"
+text:
+  font: "assets/fonts/Orbitron-Regular.ttf"
+  tabular_digits: true
+post:
+  bloom:
+    threshold: 1.15
+    intensity: 0.34
+    radii: [2.4, 5.0, 9.0, 18.0, 36.0]
+  chromatic_aberration:
+    k: 0.0006
+  vignette: 0.14
+  grain:
+    strength: 0.013
+labels:
+  - text: "SCUTUM-OB2"
+    radius: 0.44
+    angle_deg: 128
+    font_size: 46
+    tracking: -1.2
+    color: "#FFC107"
+    intensity: 1.3
+  - text: "TRACE VECTOR"
+    radius: 0.78
+    angle_deg: 12
+    font_size: 40
+    tracking: -0.8
+    color: "#00B5FF"
+    intensity: 1.1
