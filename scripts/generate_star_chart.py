@@ -4,9 +4,19 @@ from __future__ import annotations
 
 import argparse
 import struct
+import sys
 import zlib
 from pathlib import Path
 from typing import Dict
+
+# Allow running the script directly from the repository root without installing the
+# package by adding ``src`` to ``sys.path`` when available.
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+SRC_PATH = PROJECT_ROOT / "src"
+if SRC_PATH.exists():
+    src_str = str(SRC_PATH)
+    if src_str not in sys.path:
+        sys.path.insert(0, src_str)
 
 from star_chart_generator import SceneConfig, generate_star_chart
 from star_chart_generator.image import FloatImage
