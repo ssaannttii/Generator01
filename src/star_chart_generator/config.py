@@ -187,6 +187,7 @@ class HUDConfig:
     font: Optional[str] = None
     emissive: float = 1.3
     readouts: Tuple[HUDReadout, ...] = field(default_factory=tuple)
+    use_default_readouts: bool = True
 
 
 @dataclass(frozen=True)
@@ -306,9 +307,26 @@ class SceneConfig:
         )
 
         camera_data = data.get("camera", {})
-        pitch_value = camera_data.get("pitch_deg", camera_data.get("tilt_deg", 83.0))
+        if not isinstance(camera_data, dict):
+            camera_data = {}
+        pitch_value_raw = None
+        if isinstance(camera_data, dict):
+            if "pitch_deg" in camera_data:
+                pitch_value_raw = camera_data.get("pitch_deg")
+            elif "tilt_deg" in camera_data:
+                pitch_value_raw = camera_data.get("tilt_deg")
+            else:
+                ellipse_value = camera_data.get("ellipse_ratio")
+                if ellipse_value is not None:
+                    try:
+                        ellipse_ratio = float(ellipse_value)
+                        ellipse_ratio = max(-1.0, min(1.0, ellipse_ratio))
+                        pitch_value_raw = math.degrees(math.acos(ellipse_ratio))
+                    except (TypeError, ValueError):
+                        pitch_value_raw = None
+        pitch_value = float(pitch_value_raw) if pitch_value_raw is not None else 83.0
         camera = Camera(
-            pitch_deg=float(pitch_value),
+            pitch_deg=pitch_value,
             yaw_deg=float(camera_data.get("yaw_deg", 0.0)),
             fov_deg=float(camera_data.get("fov_deg", 35.0)),
             z_near=float(camera_data.get("z_near", 0.1)),
@@ -564,7 +582,10 @@ class SceneConfig:
         )
 
         hud_data = data.get("hud", {})
+        if not isinstance(hud_data, dict):
+            hud_data = {}
         hud_readouts: List[HUDReadout] = []
+        explicit_readouts = "readouts" in hud_data
         for item in hud_data.get("readouts", []):
             if not isinstance(item, dict):
                 continue
@@ -590,12 +611,22 @@ class SceneConfig:
                 HUDReadout(text=text_value, position=position, alignment=alignment)
             )
 
+        enabled_raw = hud_data.get("enabled")
+        if enabled_raw is None:
+            if explicit_readouts:
+                enabled = bool(hud_readouts)
+            else:
+                enabled = True
+        else:
+            enabled = bool(enabled_raw)
+
         hud = HUDConfig(
-            enabled=bool(hud_data.get("enabled", True)),
+            enabled=enabled,
             height_px=int(hud_data.get("height_px", hud_data.get("height", 180))),
             font=hud_data.get("font"),
             emissive=float(hud_data.get("emissive", 1.3)),
             readouts=tuple(hud_readouts),
+            use_default_readouts=not explicit_readouts,
         )
 
         seed = int(data.get("seed", 1))

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import math
+
 import pytest
 
 from star_chart_generator import QualityPreset, SceneConfig
@@ -75,3 +77,58 @@ def test_quality_invalid_raises():
     config = _make_config()
     with pytest.raises(ValueError):
         config.with_quality("invalid")
+
+
+def _base_scene(**overrides):
+    base = {
+        "seed": 1,
+        "resolution": {"width": 320, "height": 240, "ssaa": 1},
+        "rings": [
+            {
+                "r": 0.3,
+                "width": 0.01,
+                "color": "#ffffff",
+            }
+        ],
+        "stars": {
+            "bulge": {
+                "sigma": 0.18,
+                "falloff_alpha": 1.7,
+                "count": 500,
+                "size_px": [1.0, 2.0],
+            },
+            "background": {
+                "count": 200,
+                "size_px": [0.6, 1.2],
+                "min_r": 0.2,
+                "max_r": 1.0,
+            },
+        },
+    }
+    base.update(overrides)
+    return base
+
+
+def test_camera_accepts_ellipse_ratio():
+    config = SceneConfig.from_dict(
+        _base_scene(camera={"ellipse_ratio": 0.82, "yaw_deg": 12.0})
+    )
+
+    expected_pitch = math.degrees(math.acos(0.82))
+    assert math.isclose(config.camera.pitch_deg, expected_pitch, rel_tol=1e-6)
+    assert math.isclose(config.camera.ellipse_ratio, 0.82, rel_tol=1e-6)
+
+
+def test_explicit_empty_hud_disables_defaults():
+    config = SceneConfig.from_dict(_base_scene(hud={"readouts": []}))
+
+    assert config.hud.enabled is False
+    assert config.hud.readouts == ()
+    assert config.hud.use_default_readouts is False
+
+
+def test_missing_hud_section_uses_defaults():
+    config = SceneConfig.from_dict(_base_scene())
+
+    assert config.hud.enabled is True
+    assert config.hud.use_default_readouts is True

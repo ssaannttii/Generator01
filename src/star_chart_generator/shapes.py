@@ -306,7 +306,11 @@ def render_ui_layers(
         core.add_image(label_core)
         glow.add_image(gaussian_blur(label_glow, 2.0 * ssaa))
 
-    hud_readouts = config.hud.readouts or _DEFAULT_HUD_READOUTS
+    if config.hud.use_default_readouts and not config.hud.readouts:
+        hud_readouts: Sequence[HUDReadout] = _DEFAULT_HUD_READOUTS
+    else:
+        hud_readouts = config.hud.readouts
+
     if config.hud.enabled and hud_readouts:
         text_color = hex_to_rgb(config.text.color)
         _draw_hud(

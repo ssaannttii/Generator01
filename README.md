@@ -89,11 +89,12 @@ Scene files are plain YAML documents. The most important sections are:
 
 - `seed`: base random seed used when `--seed` is not provided.
 - `resolution`: output width, height, and supersampling factor (`ssaa`).
-- `camera`: controls the tilt and field of view used to squash rings.
+- `camera`: controls the tilt and field of view used to squash rings. You can express the orientation as `pitch_deg`, `tilt_deg`, or directly as `ellipse_ratio` (the vertical squish factor, where `0.82` ≈ `35°`).
 - `rings`: list of UI rings. Each ring supports radius (`r`), width, colour, dash pattern, tick marks, labels, label angle, halo strength, etc.
 - `stars`: parameters for the dense core and sparse halo distributions, plus star size and brightness behaviour.
 - `text`: typography settings (font name, size, colour, tracking, tabular digits).
 - `post`: post-processing (bloom threshold/intensity/radius, chromatic aberration, vignette, grain).
+- `hud`: optional bottom band. Omit the section to keep the factory readouts, define your own under `hud.readouts`, or set `hud.readouts: []` / `hud.enabled: false` for a clean star chart.
 
 Use `configs/demo.yaml` or `configs/denso.yaml` as a template for your own layouts. Adjust one value at a time, rerun the renderer, and inspect the result to learn what each setting does.
 
