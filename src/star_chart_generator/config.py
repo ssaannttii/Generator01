@@ -1,7 +1,8 @@
 """Configuration structures for the star chart generator."""
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
+from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
@@ -12,6 +13,30 @@ try:  # pragma: no cover - optional dependency
     import yaml  # type: ignore
 except ModuleNotFoundError:  # pragma: no cover - fallback to pure python parser
     yaml = None
+
+
+class QualityPreset(str, Enum):
+    """Enumerates available rendering quality presets."""
+
+    FINAL = "final"
+    DRAFT = "draft"
+    PREVIEW = "preview"
+
+    @classmethod
+    def from_value(
+        cls, value: "QualityPreset | str | None"
+    ) -> "QualityPreset":
+        """Normalize user-provided preset identifiers."""
+
+        if value is None:
+            return cls.FINAL
+        if isinstance(value, cls):
+            return value
+        normalized = str(value).strip().lower()
+        for preset in cls:
+            if preset.value == normalized:
+                return preset
+        raise ValueError(f"Unknown quality preset: {value}")
 
 
 @dataclass(frozen=True)
@@ -195,6 +220,62 @@ class PostConfig:
     grain: float = 0.03
     tonemap: str = "filmic"
     gamma: float = 2.2
+
+
+@dataclass(frozen=True)
+class _QualityProfile:
+    """Collection of scalar overrides applied by :class:`QualityPreset`."""
+
+    resolution_scale: float
+    ssaa: int
+    star_density_scale: float
+    star_size_scale: float
+    bloom_sigma_scale: float
+    bloom_intensity_scale: float
+    bloom_layers: int
+    grain_scale: float
+    anamorphic_enabled: bool
+    anamorphic_length_scale: float
+    anamorphic_intensity_scale: float
+    chromatic_pixels_scale: float
+    text_scale: float
+    hud_scale: float
+
+
+_QUALITY_PROFILES: Dict[QualityPreset, _QualityProfile] = {
+    QualityPreset.DRAFT: _QualityProfile(
+        resolution_scale=0.55,
+        ssaa=1,
+        star_density_scale=0.6,
+        star_size_scale=0.85,
+        bloom_sigma_scale=0.7,
+        bloom_intensity_scale=0.9,
+        bloom_layers=2,
+        grain_scale=0.6,
+        anamorphic_enabled=True,
+        anamorphic_length_scale=0.7,
+        anamorphic_intensity_scale=0.75,
+        chromatic_pixels_scale=0.65,
+        text_scale=0.8,
+        hud_scale=0.75,
+    ),
+    QualityPreset.PREVIEW: _QualityProfile(
+        resolution_scale=0.3,
+        ssaa=1,
+        star_density_scale=0.35,
+        star_size_scale=0.65,
+        bloom_sigma_scale=0.5,
+        bloom_intensity_scale=0.8,
+        bloom_layers=1,
+        grain_scale=0.0,
+        anamorphic_enabled=False,
+        anamorphic_length_scale=0.5,
+        anamorphic_intensity_scale=0.5,
+        chromatic_pixels_scale=0.0,
+        text_scale=0.65,
+        hud_scale=0.6,
+    ),
+}
 
 
 @dataclass(frozen=True)
@@ -535,6 +616,109 @@ class SceneConfig:
             name=name,
         )
 
+    def with_quality(self, preset: QualityPreset | str) -> "SceneConfig":
+        """Return a copy of the configuration adjusted to a quality preset."""
+
+        quality = QualityPreset.from_value(preset)
+        if quality is QualityPreset.FINAL:
+            return self
+
+        profile = _QUALITY_PROFILES.get(quality)
+        if profile is None:  # pragma: no cover - defensive guard
+            raise ValueError(f"Unsupported quality preset: {preset}")
+
+        def _scaled_dimension(value: int) -> int:
+            scaled = max(1, int(round(value * profile.resolution_scale)))
+            if profile.resolution_scale < 1.0:
+                scaled = min(value, scaled)
+            if scaled < 32 and value >= 32:
+                scaled = 32
+            if scaled % 2:
+                scaled = max(2, scaled - 1)
+            return max(2, scaled)
+
+        resolution = Resolution(
+            width=_scaled_dimension(self.resolution.width),
+            height=_scaled_dimension(self.resolution.height),
+            ssaa=max(1, min(self.resolution.ssaa, profile.ssaa)),
+        )
+
+        def _scaled_count(count: int) -> int:
+            return max(1, int(round(count * profile.star_density_scale)))
+
+        def _scaled_sizes(sizes: Tuple[float, float]) -> Tuple[float, float]:
+            return tuple(max(0.1, value * profile.star_size_scale) for value in sizes)
+
+        bulge = replace(
+            self.stars.bulge,
+            count=_scaled_count(self.stars.bulge.count),
+            size_px=_scaled_sizes(self.stars.bulge.size_px),
+        )
+        background = replace(
+            self.stars.background,
+            count=_scaled_count(self.stars.background.count),
+            size_px=_scaled_sizes(self.stars.background.size_px),
+        )
+        stars = replace(self.stars, bulge=bulge, background=background)
+
+        text_size = max(12, int(round(self.text.size_px * profile.text_scale)))
+        text = replace(self.text, size_px=text_size)
+
+        hud = self.hud
+        if hud.enabled:
+            hud_height = max(48, int(round(hud.height_px * profile.hud_scale)))
+            hud = replace(hud, height_px=hud_height)
+
+        base_sigmas = self.post.bloom.sigmas or (2.0,)
+        base_intensities = self.post.bloom.intensities or (0.7,)
+        layers = min(len(base_sigmas), max(1, profile.bloom_layers))
+        bloom_sigmas = tuple(
+            max(0.5, base_sigmas[i] * profile.bloom_sigma_scale) for i in range(layers)
+        )
+        bloom_intensities = tuple(
+            max(0.0, base_intensities[i % len(base_intensities)] * profile.bloom_intensity_scale)
+            for i in range(layers)
+        )
+        bloom = replace(
+            self.post.bloom,
+            sigmas=bloom_sigmas,
+            intensities=bloom_intensities,
+        )
+
+        chromatic_pixels = max(
+            0.0, self.post.chromatic_aberration.pixels * profile.chromatic_pixels_scale
+        )
+        chromatic = replace(self.post.chromatic_aberration, pixels=chromatic_pixels)
+
+        anamorphic_enabled = profile.anamorphic_enabled and self.post.anamorphic.enabled
+        anamorphic = replace(
+            self.post.anamorphic,
+            enabled=anamorphic_enabled,
+            length_px=max(0.0, self.post.anamorphic.length_px * profile.anamorphic_length_scale),
+            intensity=(
+                max(0.0, self.post.anamorphic.intensity * profile.anamorphic_intensity_scale)
+                if anamorphic_enabled
+                else 0.0
+            ),
+        )
+
+        post = replace(
+            self.post,
+            bloom=bloom,
+            chromatic_aberration=chromatic,
+            anamorphic=anamorphic,
+            grain=max(0.0, self.post.grain * profile.grain_scale),
+        )
+
+        return replace(
+            self,
+            resolution=resolution,
+            stars=stars,
+            text=text,
+            post=post,
+            hud=hud,
+        )
+
     @classmethod
     def load(cls, path: Path) -> "SceneConfig":
         """Load configuration from a YAML file."""
@@ -648,6 +832,7 @@ def _parse_scalar(token: str) -> Any:
 
 
 __all__ = [
+    "QualityPreset",
     "Resolution",
     "Camera",
     "RingConfig",

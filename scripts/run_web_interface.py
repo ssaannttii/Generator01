@@ -24,7 +24,7 @@ SRC_PATH = PROJECT_ROOT / "src"
 if str(SRC_PATH) not in sys.path:
     sys.path.insert(0, str(SRC_PATH))
 
-from star_chart_generator import SceneConfig, generate_star_chart  # noqa: E402
+from star_chart_generator import QualityPreset, SceneConfig, generate_star_chart  # noqa: E402
 
 
 DEFAULT_CONFIG_DIR = PROJECT_ROOT / "configs"
@@ -197,6 +197,13 @@ INDEX_HTML = """<!DOCTYPE html>
           <select id=\"config-select\" required></select>
         </label>
         <div class=\"row\">
+          <label>Calidad de render
+            <select id=\"quality-select\">
+              <option value=\"preview\" selected>Preview (más rápido)</option>
+              <option value=\"draft\">Draft (equilibrado)</option>
+              <option value=\"final\">Final (calidad completa)</option>
+            </select>
+          </label>
           <label>Seed (optional)
             <input type=\"number\" id=\"seed-input\" placeholder=\"Use config seed\" />
           </label>
@@ -275,6 +282,7 @@ INDEX_HTML = """<!DOCTYPE html>
       const meta = document.getElementById('render-meta');
       const config = document.getElementById('config-select').value;
       const seed = document.getElementById('seed-input').value;
+      const quality = document.getElementById('quality-select').value;
       const save = document.getElementById('save-toggle').checked;
 
       if (!config) {
@@ -290,7 +298,7 @@ INDEX_HTML = """<!DOCTYPE html>
         const response = await fetch('/api/render', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ config, seed, save })
+          body: JSON.stringify({ config, seed, save, quality })
         });
         const data = await response.json();
         if (!response.ok || data.status !== 'ok') {
@@ -299,7 +307,9 @@ INDEX_HTML = """<!DOCTYPE html>
         image.src = data.image_data_url;
         const seconds = Number(data.elapsed_seconds || 0).toFixed(2);
         const saved = data.saved_image ? ` • Guardado en ${data.saved_image}` : '';
-        meta.textContent = `Tiempo de render: ${seconds}s${saved}`;
+        const qualityUsed = (data.quality || quality || 'final');
+        const qualityTag = qualityUsed === 'final' ? '' : ` • Calidad ${qualityUsed}`;
+        meta.textContent = `Tiempo de render: ${seconds}s${saved}${qualityTag}`;
         status.textContent = 'Render completado.';
         result.classList.remove('hidden');
       } catch (error) {
@@ -433,6 +443,7 @@ class InterfaceHTTPServer(ThreadingHTTPServer):
             "CONFIG_DIR": config_dir,
             "OUTPUT_DIR": output_dir,
             "SceneConfig": SceneConfig,
+            "QualityPreset": QualityPreset,
             "generate_star_chart": generate_star_chart,
         }
 
@@ -489,6 +500,15 @@ class RequestHandler(BaseHTTPRequestHandler):
             save_output = bool(payload.get("save", False))
 
             config = SceneConfig.load(config_path)
+            quality_name = payload.get("quality")
+            applied_quality = QualityPreset.FINAL.value
+            if quality_name:
+                try:
+                    preset = QualityPreset.from_value(quality_name)
+                except ValueError as exc:
+                    raise ValueError(str(exc)) from exc
+                applied_quality = preset.value
+                config = config.with_quality(preset)
 
             start = time.perf_counter()
             result = generate_star_chart(config, seed=seed)
@@ -517,6 +537,7 @@ class RequestHandler(BaseHTTPRequestHandler):
                     "image_data_url": image_data_url,
                     "elapsed_seconds": elapsed,
                     "saved_image": saved_image,
+                    "quality": applied_quality,
                 }
             )
         except Exception as exc:  # pragma: no cover - error reporting path

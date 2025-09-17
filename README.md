@@ -57,6 +57,7 @@ Whenever you open a new terminal, reactivate the environment (`Activate.ps1` on 
 - `--seed 12345` – override the random number generator seed for reproducible variations.
 - `--layers-dir layers/` – export intermediate PNG layers (`stars`, `ui_core`, `ui_glow`, `final_linear`).
 - `--compare path/to/reference.png` – print the mean absolute difference against a reference render.
+- `--quality preview` – apply a low-quality preset (`preview` or `draft`) for much faster test renders. Use `final` to keep the original settings.
 
 Run `python scripts/generate_star_chart.py --help` to see all options.
 
@@ -68,7 +69,7 @@ Prefer a graphical workflow? Launch the built-in HTML control panel:
 python scripts/run_web_interface.py
 ```
 
-The server selects a free local port and opens your default browser automatically. From the interface you can pick any YAML scene stored in `configs/`, optionally override the RNG seed, and trigger renders directly from the page. The resulting PNG preview is displayed inline and—when the **Guardar PNG** toggle is enabled—saved under `output/` with a timestamp.
+The server selects a free local port and opens your default browser automatically. From the interface you can pick any YAML scene stored in `configs/`, choose a **Calidad de render** preset (`Preview` is ideal for quick iterations), optionally override the RNG seed, and trigger renders directly from the page. The resulting PNG preview is displayed inline and—when the **Guardar PNG** toggle is enabled—saved under `output/` with a timestamp.
 
 The panel also includes a **Debug command console**. It executes arbitrary Python code inside the project context, giving you direct access to `SceneConfig`, `generate_star_chart`, `PROJECT_ROOT`, `CONFIG_DIR`, and `OUTPUT_DIR` to perform quick experiments or bug investigations.
 
