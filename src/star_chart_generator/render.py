@@ -24,6 +24,7 @@ class RenderResult:
 
 def generate_star_chart(config: SceneConfig, *, seed: Optional[int] = None) -> RenderResult:
     rng = random.Random(seed if seed is not None else config.seed)
+    ssaa = max(1, config.resolution.ssaa)
 
     stars = generate_star_field(config.stars, config.resolution, config.camera, rng)
     star_layer = render_star_field(stars, config.resolution)
@@ -37,14 +38,15 @@ def generate_star_chart(config: SceneConfig, *, seed: Optional[int] = None) -> R
         combined,
         threshold=config.post.bloom.threshold,
         intensity=config.post.bloom.intensity,
-        radius=config.post.bloom.radius,
+        radius=config.post.bloom.radius * ssaa,
     )
-    aberrated = apply_chromatic_aberration(bloom, config.post.chromatic_aberration.k)
+    aberrated = apply_chromatic_aberration(
+        bloom, config.post.chromatic_aberration.k / ssaa
+    )
     vignetted = apply_vignette(aberrated, config.post.vignette)
-    grained = add_grain(vignetted, config.post.grain, rng)
+    grained = add_grain(vignetted, config.post.grain * ssaa, rng)
     final_linear = tone_map_aces(grained)
 
-    ssaa = config.resolution.ssaa
     if ssaa > 1:
         star_layer = downsample(star_layer, ssaa)
         ui_core = downsample(ui_core, ssaa)

@@ -49,12 +49,13 @@ def render_ui_layers(config: SceneConfig, resolution: Tuple[int, int]) -> Tuple[
     center = (width / 2.0, height / 2.0)
     ellipse_ratio = config.camera.ellipse_ratio
     base_radius = min(width, height) * 0.5 * 0.92
+    ssaa = float(max(1, config.resolution.ssaa))
 
     core = FloatImage.new(width, height, 0.0)
     glow = FloatImage.new(width, height, 0.0)
 
     label_specs: List[LabelSpec] = []
-    label_scale = max(1.0, config.text.size_px / (7 * 2.0))
+    label_scale = max(1.0, config.text.size_px / (7 * 2.0)) * ssaa
 
     for index, ring in enumerate(config.rings):
         rx = base_radius * ring.r
@@ -126,9 +127,9 @@ def render_ui_layers(config: SceneConfig, resolution: Tuple[int, int]) -> Tuple[
         placements = layout_labels(label_specs)
         label_core, label_glow = draw_label_layers((width, height), placements, config.text)
         core.add_image(label_core)
-        glow.add_image(gaussian_blur(label_glow, 2.0))
+        glow.add_image(gaussian_blur(label_glow, 2.0 * ssaa))
 
-    glow = gaussian_blur(glow, 3.0)
+    glow = gaussian_blur(glow, 3.0 * ssaa)
     return core, glow
 
 

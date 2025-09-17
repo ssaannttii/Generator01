@@ -50,6 +50,7 @@ def generate_star_field(
     rng: random.Random,
 ) -> List[Star]:
     width, height = resolution.supersampled()
+    ssaa = max(1, resolution.ssaa)
     base_radius = min(width, height) * 0.5 * 0.92
     ellipse_ratio = camera.ellipse_ratio
     cx, cy = width / 2.0, height / 2.0
@@ -62,6 +63,7 @@ def generate_star_field(
         intensity = (1.0 - rng.random()) ** (1.0 / config.brightness_power)
         color = _color_from_intensity(intensity)
         size = config.min_size_px + intensity * (config.max_size_px - config.min_size_px)
+        size *= ssaa
         rx = base_radius * radius
         ry = rx * ellipse_ratio
         x = cx + rx * math.cos(theta)
@@ -74,6 +76,7 @@ def generate_star_field(
         intensity = (1.0 - rng.random()) ** (1.0 / (config.brightness_power + 0.4))
         color = _color_from_intensity(intensity * 0.8)
         size = config.min_size_px * 0.75 + intensity * (config.max_size_px - config.min_size_px)
+        size *= ssaa
         rx = base_radius * radius
         ry = rx * ellipse_ratio
         x = cx + rx * math.cos(theta)
