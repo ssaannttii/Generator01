@@ -92,8 +92,9 @@ Este documento describe el objetivo visual, la arquitectura recomendada, el pipe
 - **Anillos**: número, radios, grosores, colores, *dash*, opacidad, radio del *glow*.
 - **Estrellas**: cuenta total, σ/α del núcleo, γ de brillo, tamaño mínimo/máximo, rampa de color.
 - **Etiquetas**: fuentes, tamaños, *arc padding*, reglas anti-colisión, *leader lines* (on/off).
-- **Cámara**: inclinación, FOV, *tilt-shift*, DOF on/off.
+- **Cámara**: inclinación (en `pitch_deg`/`tilt_deg` o `ellipse_ratio`), FOV, *tilt-shift*, DOF on/off.
 - **Post**: threshold/intensidad de bloom, aberración cromática, vignette, LUT.
+- **HUD**: banda inferior opcional; usar presets por defecto, definir `readouts` propios o desactivarlo.
 - **Exportes**: PNG 8-bit, TIFF/EXR 16-bit, PSD por capas (UI/estrellas/post).
 
 ### Formato de escena sugerido (YAML)
