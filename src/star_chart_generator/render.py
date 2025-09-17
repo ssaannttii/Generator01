@@ -6,9 +6,17 @@ from typing import Dict, Optional
 
 import random
 
+from .camera import create_projection
 from .config import SceneConfig
 from .image import FloatImage
-from .post import add_grain, apply_bloom, apply_chromatic_aberration, apply_vignette, tone_map_aces
+from .post import (
+    add_grain,
+    apply_anamorphic_streak,
+    apply_bloom,
+    apply_chromatic_aberration,
+    apply_vignette,
+    tone_map_aces,
+)
 from .sampling import downsample, generate_star_field, render_star_field
 from .shapes import render_ui_layers
 
@@ -26,26 +34,39 @@ def generate_star_chart(config: SceneConfig, *, seed: Optional[int] = None) -> R
     rng = random.Random(seed if seed is not None else config.seed)
     ssaa = max(1, config.resolution.ssaa)
 
-    stars = generate_star_field(config.stars, config.resolution, config.camera, rng)
-    star_layer = render_star_field(stars, config.resolution)
-    ui_core, ui_glow = render_ui_layers(config, config.resolution.supersampled())
+    projection = create_projection(config.resolution, config.camera, config.rings)
+
+    stars = generate_star_field(config.stars, projection, rng, ssaa=ssaa)
+    star_layer = render_star_field(stars, projection)
+    ui_core, ui_glow = render_ui_layers(config, projection, ssaa=ssaa)
 
     combined = star_layer.copy()
     combined.add_image(ui_core)
     combined.add_image(ui_glow)
 
-    bloom = apply_bloom(
+    bloom, bright = apply_bloom(
         combined,
         threshold=config.post.bloom.threshold,
-        intensity=config.post.bloom.intensity,
-        radius=config.post.bloom.radius * ssaa,
+        sigmas=tuple(sigma * ssaa for sigma in config.post.bloom.sigmas),
+        intensities=config.post.bloom.intensities,
     )
+
+    if config.post.anamorphic.enabled:
+        bloom = apply_anamorphic_streak(
+            bloom,
+            bright,
+            length_px=config.post.anamorphic.length_px * ssaa,
+            intensity=config.post.anamorphic.intensity,
+        )
+
     aberrated = apply_chromatic_aberration(
-        bloom, config.post.chromatic_aberration.k / ssaa
+        bloom,
+        pixels=config.post.chromatic_aberration.pixels / ssaa,
+        center=config.post.chromatic_aberration.center,
     )
     vignetted = apply_vignette(aberrated, config.post.vignette)
     grained = add_grain(vignetted, config.post.grain * ssaa, rng)
-    final_linear = tone_map_aces(grained)
+    final_linear = tone_map_aces(grained, gamma=config.post.gamma)
 
     if ssaa > 1:
         star_layer = downsample(star_layer, ssaa)

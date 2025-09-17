@@ -29,19 +29,39 @@ class Resolution:
 
 @dataclass(frozen=True)
 class Camera:
-    """Camera orientation used for ring projection."""
+    """Camera orientation and projection settings."""
 
-    tilt_deg: float = 32.0
+    pitch_deg: float = 83.0
+    yaw_deg: float = 0.0
     fov_deg: float = 35.0
+    z_near: float = 0.1
+    z_far: float = 6.0
 
     @property
-    def tilt_radians(self) -> float:
-        return math.radians(self.tilt_deg)
+    def tilt_deg(self) -> float:
+        """Legacy accessor for configurations using ``tilt_deg``."""
+
+        return self.pitch_deg
+
+    @property
+    def pitch_radians(self) -> float:
+        return math.radians(self.pitch_deg)
 
     @property
     def ellipse_ratio(self) -> float:
-        """Approximate squish factor for the vertical axis of the rings."""
-        return math.cos(self.tilt_radians)
+        """Approximate squish factor retained for backwards compatibility."""
+
+        return math.cos(self.pitch_radians)
+
+
+@dataclass(frozen=True)
+class RingTickConfig:
+    """Tick placement parameters for a ring."""
+
+    every_deg: Tuple[float, ...]
+    length_px: Tuple[float, float]
+    alpha: float = 0.8
+    weight: float = 1.0
 
 
 @dataclass(frozen=True)
@@ -58,6 +78,7 @@ class RingConfig:
     label_offset: float = 0.015
     glow: float = 1.0
     halo_color: Optional[str] = None
+    tick: Optional[RingTickConfig] = None
 
 
 @dataclass(frozen=True)
@@ -81,33 +102,35 @@ class ReadoutConfig:
 
 
 @dataclass(frozen=True)
-class CoreDistribution:
-    """Configuration for the dense stellar core."""
+class BulgeDistribution:
+    """Configuration for the dense stellar bulge."""
 
-    sigma: float
-    alpha: float
     count: int
+    sigma: float
+    falloff_alpha: float
+    size_px: Tuple[float, float]
 
 
 @dataclass(frozen=True)
-class HaloDistribution:
-    """Configuration for the sparse halo of stars."""
+class BackgroundDistribution:
+    """Configuration for the sparse background stars."""
 
     count: int
-    min_r: float
-    max_r: float
+    size_px: Tuple[float, float]
+    jitter: float = 0.3
+    min_r: float = 0.0
+    max_r: float = 1.0
 
 
 @dataclass(frozen=True)
 class StarConfig:
     """Aggregate settings for star sampling."""
 
-    core: CoreDistribution
-    halo: HaloDistribution
-    brightness_power: float = 1.8
-    min_size_px: float = 0.6
-    max_size_px: float = 2.8
-    color_jitter: float = 0.08
+    bulge: BulgeDistribution
+    background: BackgroundDistribution
+    warm_color: str = "#E8B551"
+    hot_color: str = "#FFFFFF"
+    background_color: str = "#CFA05A"
 
 
 @dataclass(frozen=True)
@@ -122,15 +145,43 @@ class TextConfig:
 
 
 @dataclass(frozen=True)
+class HUDReadout:
+    """Configuration for a HUD readout displayed along the bottom band."""
+
+    text: str
+    position: float
+    alignment: str = "center"
+
+
+@dataclass(frozen=True)
+class HUDConfig:
+    """Settings controlling the bottom HUD overlay."""
+
+    enabled: bool = False
+    height_px: int = 180
+    font: Optional[str] = None
+    emissive: float = 1.3
+    readouts: Tuple[HUDReadout, ...] = field(default_factory=tuple)
+
+
+@dataclass(frozen=True)
 class BloomConfig:
-    threshold: float = 1.1
-    intensity: float = 0.32
-    radius: float = 18.0
+    threshold: float = 0.75
+    sigmas: Tuple[float, ...] = (2.0, 6.0, 12.0)
+    intensities: Tuple[float, ...] = (0.7, 0.4, 0.2)
 
 
 @dataclass(frozen=True)
 class ChromaticAberrationConfig:
-    k: float = 0.0015
+    pixels: float = 1.2
+    center: Optional[Tuple[float, float]] = None
+
+
+@dataclass(frozen=True)
+class AnamorphicConfig:
+    enabled: bool = True
+    length_px: float = 80.0
+    intensity: float = 0.15
 
 
 @dataclass(frozen=True)
@@ -139,8 +190,11 @@ class PostConfig:
     chromatic_aberration: ChromaticAberrationConfig = field(
         default_factory=ChromaticAberrationConfig
     )
-    vignette: float = 0.12
-    grain: float = 0.015
+    anamorphic: AnamorphicConfig = field(default_factory=AnamorphicConfig)
+    vignette: float = 0.25
+    grain: float = 0.03
+    tonemap: str = "filmic"
+    gamma: float = 2.2
 
 
 @dataclass(frozen=True)
@@ -155,6 +209,7 @@ class SceneConfig:
     readouts: List[ReadoutConfig] = field(default_factory=list)
     text: TextConfig = field(default_factory=TextConfig)
     post: PostConfig = field(default_factory=PostConfig)
+    hud: HUDConfig = field(default_factory=HUDConfig)
     lut: Optional[str] = None
     name: Optional[str] = None
 
@@ -170,30 +225,74 @@ class SceneConfig:
         )
 
         camera_data = data.get("camera", {})
+        pitch_value = camera_data.get("pitch_deg", camera_data.get("tilt_deg", 83.0))
         camera = Camera(
-            tilt_deg=float(camera_data.get("tilt_deg", 32.0)),
+            pitch_deg=float(pitch_value),
+            yaw_deg=float(camera_data.get("yaw_deg", 0.0)),
             fov_deg=float(camera_data.get("fov_deg", 35.0)),
+            z_near=float(camera_data.get("z_near", 0.1)),
+            z_far=float(camera_data.get("z_far", 6.0)),
         )
 
-        rings = [
-            RingConfig(
-                r=float(item["r"]),
-                width=float(item.get("width", 0.006)),
-                color=str(item["color"]),
-                dash=tuple(item.get("dash", [])) or None,
-                ticks_every_deg=float(item["ticks_every_deg"])
-                if "ticks_every_deg" in item
-                else None,
-                label=item.get("label"),
-                label_angle_deg=float(item["label_angle_deg"])
-                if "label_angle_deg" in item
-                else None,
-                label_offset=float(item.get("label_offset", 0.015)),
-                glow=float(item.get("glow", 1.0)),
-                halo_color=str(item.get("halo_color", item.get("color", "#ffffff"))),
+        rings: List[RingConfig] = []
+        for item in data.get("rings", []):
+            if not isinstance(item, dict):
+                continue
+            if "r" not in item or "color" not in item:
+                continue
+            tick_spec: Optional[RingTickConfig] = None
+            tick_data = item.get("tick")
+            if isinstance(tick_data, dict):
+                every_raw = tick_data.get("every_deg", tick_data.get("spacing"))
+                every: List[float] = []
+                if isinstance(every_raw, (int, float)):
+                    every.append(float(every_raw))
+                elif isinstance(every_raw, (list, tuple)):
+                    for value in every_raw:
+                        try:
+                            every.append(float(value))
+                        except (TypeError, ValueError):
+                            continue
+                every = [value for value in every if value > 0]
+                length_raw = tick_data.get("length_px", tick_data.get("length"))
+                lengths: Tuple[float, float]
+                if isinstance(length_raw, (int, float)):
+                    length_value = float(length_raw)
+                    lengths = (length_value, length_value)
+                elif isinstance(length_raw, (list, tuple)) and length_raw:
+                    first = float(length_raw[0])
+                    second = float(length_raw[1] if len(length_raw) > 1 else length_raw[0])
+                    lengths = (first, second)
+                else:
+                    lengths = (8.0, 14.0)
+                if every:
+                    lo, hi = min(lengths), max(lengths)
+                    tick_spec = RingTickConfig(
+                        every_deg=tuple(sorted(every)),
+                        length_px=(lo, hi),
+                        alpha=float(tick_data.get("alpha", 0.8)),
+                        weight=float(tick_data.get("weight", 1.0)),
+                    )
+
+            rings.append(
+                RingConfig(
+                    r=float(item.get("r", 0.0)),
+                    width=float(item.get("width", 0.006)),
+                    color=str(item.get("color", "#ffffff")),
+                    dash=tuple(item.get("dash", [])) or None,
+                    ticks_every_deg=float(item["ticks_every_deg"])
+                    if "ticks_every_deg" in item
+                    else None,
+                    label=item.get("label"),
+                    label_angle_deg=float(item["label_angle_deg"])
+                    if "label_angle_deg" in item
+                    else None,
+                    label_offset=float(item.get("label_offset", 0.015)),
+                    glow=float(item.get("glow", 1.0)),
+                    halo_color=str(item.get("halo_color", item.get("color", "#ffffff"))),
+                    tick=tick_spec,
+                )
             )
-            for item in data.get("rings", [])
-        ]
 
         readouts: List[ReadoutConfig] = []
         for item in data.get("readouts", []):
@@ -240,24 +339,54 @@ class SceneConfig:
                 )
             )
 
+        def _pair(value: Any, default: Tuple[float, float]) -> Tuple[float, float]:
+            if isinstance(value, (list, tuple)) and value:
+                if len(value) == 1:
+                    val = float(value[0])
+                    return (val, val)
+                return (float(value[0]), float(value[1]))
+            if value is not None:
+                try:
+                    val = float(value)
+                except (TypeError, ValueError):
+                    return default
+                return (val, val)
+            return default
+
         stars_data = data.get("stars", {})
-        core_data = stars_data.get("core", {})
-        halo_data = stars_data.get("halo", {})
+        bulge_data = stars_data.get("bulge", stars_data.get("core", {}))
+        background_data = stars_data.get(
+            "background", stars_data.get("bg", stars_data.get("halo", {}))
+        )
+
+        size_default = (
+            float(stars_data.get("min_size_px", 0.6)),
+            float(stars_data.get("max_size_px", 2.6)),
+        )
+        bulge_size = _pair(bulge_data.get("size_px", size_default), (1.0, 2.5))
+        background_size = _pair(
+            background_data.get("size_px", size_default), (0.6, 1.6)
+        )
+
         stars = StarConfig(
-            core=CoreDistribution(
-                sigma=float(core_data.get("sigma", 0.18)),
-                alpha=float(core_data.get("alpha", 3.2)),
-                count=int(core_data.get("count", 18000)),
+            bulge=BulgeDistribution(
+                count=int(bulge_data.get("count", 12000)),
+                sigma=float(bulge_data.get("sigma", 0.14)),
+                falloff_alpha=float(
+                    bulge_data.get("falloff_alpha", bulge_data.get("alpha", 1.8))
+                ),
+                size_px=bulge_size,
             ),
-            halo=HaloDistribution(
-                count=int(halo_data.get("count", 6000)),
-                min_r=float(halo_data.get("min_r", 0.35)),
-                max_r=float(halo_data.get("max_r", 1.0)),
+            background=BackgroundDistribution(
+                count=int(background_data.get("count", 3500)),
+                size_px=background_size,
+                jitter=float(background_data.get("jitter", 0.3)),
+                min_r=float(background_data.get("min_r", 0.0)),
+                max_r=float(background_data.get("max_r", 1.0)),
             ),
-            brightness_power=float(stars_data.get("brightness_power", 1.8)),
-            min_size_px=float(stars_data.get("min_size_px", 0.6)),
-            max_size_px=float(stars_data.get("max_size_px", 2.8)),
-            color_jitter=float(stars_data.get("color_jitter", 0.08)),
+            warm_color=str(stars_data.get("warm_color", "#E8B551")),
+            hot_color=str(stars_data.get("hot_color", "#FFFFFF")),
+            background_color=str(stars_data.get("background_color", "#CFA05A")),
         )
 
         text_data = data.get("text", {})
@@ -271,18 +400,121 @@ class SceneConfig:
 
         post_data = data.get("post", {})
         bloom_data = post_data.get("bloom", {})
-        chromatic_data = post_data.get("chromatic_aberration", {})
+
+        def _as_floats(value: Any) -> Tuple[float, ...]:
+            if isinstance(value, (list, tuple)):
+                result: List[float] = []
+                for item in value:
+                    try:
+                        result.append(float(item))
+                    except (TypeError, ValueError):
+                        continue
+                return tuple(result)
+            if value is not None:
+                try:
+                    return (float(value),)
+                except (TypeError, ValueError):
+                    return tuple()
+            return tuple()
+
+        bloom_sigmas = _as_floats(
+            bloom_data.get("sigma_px")
+            or bloom_data.get("sigmas")
+            or bloom_data.get("radius")
+        )
+        if not bloom_sigmas:
+            bloom_sigmas = (2.0, 6.0, 12.0)
+
+        bloom_intensities = _as_floats(
+            bloom_data.get("intensity") or bloom_data.get("intensities")
+        )
+        if not bloom_intensities:
+            bloom_intensities = (0.7, 0.4, 0.2)
+        if len(bloom_intensities) == 1 and len(bloom_sigmas) > 1:
+            bloom_intensities = tuple(bloom_intensities[0] for _ in bloom_sigmas)
+        elif len(bloom_sigmas) != len(bloom_intensities):
+            bloom_intensities = tuple(
+                bloom_intensities[i % len(bloom_intensities)]
+                for i in range(len(bloom_sigmas))
+            )
+
+        chroma_data = post_data.get("chromab", post_data.get("chromatic_aberration", {}))
+        center_value = chroma_data.get("center")
+        if isinstance(center_value, (list, tuple)) and len(center_value) >= 2:
+            chroma_center: Optional[Tuple[float, float]] = (
+                float(center_value[0]),
+                float(center_value[1]),
+            )
+        else:
+            chroma_center = None
+        if isinstance(center_value, str) and center_value.strip().lower() not in {
+            "image_center",
+            "centre",
+            "center",
+        }:
+            try:
+                parts = [float(part) for part in center_value.split(",")]
+                if len(parts) >= 2:
+                    chroma_center = (parts[0], parts[1])
+            except Exception:  # pragma: no cover - defensive
+                chroma_center = None
+
+        anamorphic_data = post_data.get("anamorphic", {})
+
         post = PostConfig(
             bloom=BloomConfig(
-                threshold=float(bloom_data.get("threshold", 1.1)),
-                intensity=float(bloom_data.get("intensity", 0.32)),
-                radius=float(bloom_data.get("radius", 18.0)),
+                threshold=float(bloom_data.get("threshold", 0.75)),
+                sigmas=bloom_sigmas,
+                intensities=bloom_intensities,
             ),
             chromatic_aberration=ChromaticAberrationConfig(
-                k=float(chromatic_data.get("k", 0.0015))
+                pixels=float(chroma_data.get("pixels", chroma_data.get("k", 1.2))),
+                center=chroma_center,
             ),
-            vignette=float(post_data.get("vignette", 0.12)),
-            grain=float(post_data.get("grain", 0.015)),
+            anamorphic=AnamorphicConfig(
+                enabled=bool(anamorphic_data.get("enabled", True)),
+                length_px=float(anamorphic_data.get("length_px", anamorphic_data.get("length", 80.0))),
+                intensity=float(anamorphic_data.get("intensity", 0.15)),
+            ),
+            vignette=float(post_data.get("vignette", 0.25)),
+            grain=float(post_data.get("grain", 0.03)),
+            tonemap=str(post_data.get("tonemap", "filmic")),
+            gamma=float(post_data.get("gamma", 2.2)),
+        )
+
+        hud_data = data.get("hud", {})
+        hud_readouts: List[HUDReadout] = []
+        for item in hud_data.get("readouts", []):
+            if not isinstance(item, dict):
+                continue
+            text_value = str(item.get("text", "")).strip()
+            if not text_value:
+                continue
+            position_raw = item.get("position", item.get("x", item.get("u", 0.5)))
+            try:
+                position = float(position_raw)
+            except (TypeError, ValueError):
+                position = 0.5
+            position = max(0.0, min(1.0, position))
+            alignment_raw = str(item.get("alignment", "center")).lower()
+            alignment = {
+                "center": "center",
+                "middle": "center",
+                "start": "start",
+                "left": "start",
+                "end": "end",
+                "right": "end",
+            }.get(alignment_raw, "center")
+            hud_readouts.append(
+                HUDReadout(text=text_value, position=position, alignment=alignment)
+            )
+
+        hud = HUDConfig(
+            enabled=bool(hud_data.get("enabled", True)),
+            height_px=int(hud_data.get("height_px", hud_data.get("height", 180))),
+            font=hud_data.get("font"),
+            emissive=float(hud_data.get("emissive", 1.3)),
+            readouts=tuple(hud_readouts),
         )
 
         seed = int(data.get("seed", 1))
@@ -298,6 +530,7 @@ class SceneConfig:
             stars=stars,
             text=text,
             post=post,
+            hud=hud,
             lut=lut,
             name=name,
         )

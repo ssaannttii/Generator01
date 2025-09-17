@@ -183,6 +183,46 @@ def _draw_glyph(image: FloatImage, glyph: Glyph, center: Tuple[float, float], sc
             image.add_disc(cx + rx, cy + ry, max(0.5, scale * 0.45), color, intensity)
 
 
+def draw_text_line(
+    core: FloatImage,
+    glow: FloatImage,
+    text: str,
+    center: Tuple[float, float],
+    *,
+    scale: float,
+    color: Tuple[float, float, float],
+    glow_color: Tuple[float, float, float],
+    emissive: float,
+    alignment: str = "center",
+    angle: float = 0.0,
+    tracking: float = 0.0,
+) -> None:
+    advances = _text_advances(text, tracking)
+    total = sum(advances) * scale
+    alignment = alignment.lower()
+    if alignment == "start":
+        cursor = 0.0
+    elif alignment == "end":
+        cursor = -total
+    else:
+        cursor = -total * 0.5
+
+    angle_rad = math.radians(angle)
+    cos_a = math.cos(angle_rad)
+    sin_a = math.sin(angle_rad)
+
+    cx, cy = center
+
+    for advance, char in zip(advances, text):
+        cursor += (advance * scale) * 0.5
+        px = cx + cursor * cos_a
+        py = cy + cursor * sin_a
+        glyph = _glyph(char)
+        _draw_glyph(core, glyph, (px, py), scale, angle, color, 1.0)
+        _draw_glyph(glow, glyph, (px, py), scale * 1.6, angle, glow_color, emissive)
+        cursor += (advance * scale) * 0.5
+
+
 def draw_label_layers(
     size: Tuple[int, int],
     placements: Sequence[LabelPlacement],
@@ -237,4 +277,10 @@ def draw_label_layers(
     return core, glow
 
 
-__all__ = ["LabelSpec", "LabelPlacement", "layout_labels", "draw_label_layers"]
+__all__ = [
+    "LabelSpec",
+    "LabelPlacement",
+    "layout_labels",
+    "draw_label_layers",
+    "draw_text_line",
+]
