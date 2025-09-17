@@ -60,7 +60,29 @@ Whenever you open a new terminal, reactivate the environment (`Activate.ps1` on 
 
 Run `python scripts/generate_star_chart.py --help` to see all options.
 
-## 4. Understanding the scene configuration
+## 4. HTML interface
+
+Prefer a graphical workflow? Launch the built-in HTML control panel:
+
+```bash
+python scripts/run_web_interface.py
+```
+
+The server selects a free local port and opens your default browser automatically. From the interface you can pick any YAML scene stored in `configs/`, optionally override the RNG seed, and trigger renders directly from the page. The resulting PNG preview is displayed inline and—when the **Guardar PNG** toggle is enabled—saved under `output/` with a timestamp.
+
+The panel also includes a **Debug command console**. It executes arbitrary Python code inside the project context, giving you direct access to `SceneConfig`, `generate_star_chart`, `PROJECT_ROOT`, `CONFIG_DIR`, and `OUTPUT_DIR` to perform quick experiments or bug investigations.
+
+On Windows you can double-click `launch_web_interface.bat` to start the same interface without touching the terminal. The script detects a local virtual environment (`.venv`) automatically.
+
+Advanced flags:
+
+- `--no-browser` – skip opening the browser automatically.
+- `--host 0.0.0.0` – expose the interface to your LAN (only do this on trusted networks).
+- `--port 8000` – force a specific port instead of picking one dynamically.
+
+Press `Ctrl+C` in the terminal that started the server to stop it.
+
+## 5. Understanding the scene configuration
 
 Scene files are plain YAML documents. The most important sections are:
 
@@ -74,7 +96,7 @@ Scene files are plain YAML documents. The most important sections are:
 
 Use `configs/demo.yaml` or `configs/denso.yaml` as a template for your own layouts. Adjust one value at a time, rerun the renderer, and inspect the result to learn what each setting does.
 
-## 5. Using the generator as a Python library
+## 6. Using the generator as a Python library
 
 You can embed the renderer inside another Python script:
 
@@ -90,7 +112,7 @@ If you prefer to build the configuration in code (for example, loading parameter
 
 The `RenderResult` object returned by `generate_star_chart` contains the final tone-mapped image (`result.image`) and intermediate layers (`result.layers` dictionary).
 
-## 6. Running tests (optional)
+## 7. Running tests (optional)
 
 Automated tests ensure the generator still works after code changes:
 ```bash
@@ -98,7 +120,7 @@ pytest
 ```
 This command should be executed inside the virtual environment from the project root.
 
-## 7. Troubleshooting
+## 8. Troubleshooting
 
 - **PNG is all black**: make sure supersampling (`ssaa`) is set to `1` or higher and that the `rings` section is not empty.
 - **`ModuleNotFoundError: No module named 'yaml'`**: either install PyYAML (`pip install pyyaml`) or remove YAML features that rely on anchors/aliases; the built-in parser supports simple key-value pairs.

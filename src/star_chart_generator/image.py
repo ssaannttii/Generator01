@@ -160,7 +160,9 @@ class FloatImage:
             rows.append(row_bytes)
         return rows
 
-    def save_png(self, path: str) -> None:
+    def to_png_bytes(self) -> bytes:
+        """Return the image encoded as PNG bytes."""
+
         rows = self.to_uint8_rows()
         data = b"".join(rows)
         compressed = zlib.compress(data, level=6)
@@ -174,11 +176,16 @@ class FloatImage:
             )
 
         ihdr = struct.pack(">IIBBBBB", self.width, self.height, 8, 2, 0, 0, 0)
+        png_bytes = bytearray()
+        png_bytes.extend(b"\x89PNG\r\n\x1a\n")
+        png_bytes.extend(chunk(b"IHDR", ihdr))
+        png_bytes.extend(chunk(b"IDAT", compressed))
+        png_bytes.extend(chunk(b"IEND", b""))
+        return bytes(png_bytes)
+
+    def save_png(self, path: str) -> None:
         with open(path, "wb") as fh:
-            fh.write(b"\x89PNG\r\n\x1a\n")
-            fh.write(chunk(b"IHDR", ihdr))
-            fh.write(chunk(b"IDAT", compressed))
-            fh.write(chunk(b"IEND", b""))
+            fh.write(self.to_png_bytes())
 
     def sample(self, x: float, y: float) -> Color:
         if x < 0 or x >= self.width - 1 or y < 0 or y >= self.height - 1:
